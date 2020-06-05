@@ -79,7 +79,7 @@ __device__ float smith_mask(float3 x, float3 n, float a2){
 }
 
 __global__ void render(	float3* const pResult, 
-						const uint32_t w, const uint32_t h,
+						const uint32_t w, const uint32_t h, const uint32_t spp,
 						Scene* const scene,
 						curandState* randState){
 	const uint32_t i = blockIdx.x*blockDim.x + threadIdx.x;
@@ -90,7 +90,6 @@ __global__ void render(	float3* const pResult,
 	const float imgDimNorm = 1.0/h;
 	const uint32_t idx = j*w+i;
 	curandState *rand_local = randState+idx;
-	uint32_t spp = 4000;
 	bool NEE = !true;
 
 	for(uint32_t n=0; n<spp; n++){
@@ -160,8 +159,9 @@ __global__ void render(	float3* const pResult,
 int main(){
 	printBreak();
 
-	const int w = 512;
-	const int h = 512;
+	const uint32_t w = 512;
+	const uint32_t h = 512;
+	const uint32_t spp = 4000;
 	float3* result;
 	cudaMallocManaged(&result, w*h*sizeof(float3));
 
@@ -183,7 +183,7 @@ int main(){
 	initRandom<<<blocks, threads>>>(randState, w, h);
 	cudaDeviceSynchronize();
 
-	render<<<blocks, threads>>>(result, w, h, scene, randState);
+	render<<<blocks, threads>>>(result, w, h, spp, scene, randState);
 	checkCudaErrors(cudaGetLastError());
 	cudaDeviceSynchronize();
 
