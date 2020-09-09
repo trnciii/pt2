@@ -14,9 +14,10 @@ struct Sphere{
 	__host__ __device__ Sphere(float3 _p, float _r, Material *_m):center(_p), r(_r), mtl(_m){}
 
 	__device__ float dist(Ray &ray){
-		float b = dot(ray.d, ray.o-center);
+		float3 OC = ray.o-center;
+		float b = dot(ray.d, OC);
 		float b2 = b*b;
-		float c = dot(ray.o-center, ray.o-center) - r*r;
+		float c = dot(OC, OC) - r*r;
 		if(c<b2){
 			float t = b+sqrt(b2-c);
 			if(0<t) t = b-sqrt(b2-c);
