@@ -11,6 +11,7 @@
 #include "Scene.h"
 #include "PathState.h"
 
+
 #define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__ )
 void check_cuda(cudaError_t result, char const *const func, const char *const file, int const line) {
 	if (result) {
@@ -27,40 +28,7 @@ __global__ void initRandom(curandState* state, const int w, const int h){
 	const int j = blockIdx.y*blockDim.y + threadIdx.y;
 	if(i<w && j<h){
 		const int idx = j*w+i;
-		// curand_init(9999, idx, 0, state+idx);
-		curand_init(idx, 0, 0, state+idx);
-	}
-}
-
-__device__ void throuput(	float3 *th, Ray *ray,
-							Hit &hit, curandState *randState){
-	if(hit.mtl->type == lambert){
-		float u1 = curand_uniform(randState);
-		float u2 = curand_uniform(randState) * 2*M_PI;
-
-		float3 bitan = normalize(cross(hit.n, hit.tan));
-		float r = sqrt(u1);
-		
-		ray->o = hit.pos + (1e-6*hit.n);
-		ray->d = (hit.n * (sqrt(1-u1)))
-			+ (hit.tan * (r*cos(u2)))
-			+ (bitan * (r*sin(u2)));
-		*th *= hit.mtl->col;
-	}
-
-	if(hit.mtl->type == GGX_ref_iso){
-		float u1 = curand_uniform(randState);
-		float u2 = curand_uniform(randState) * 2*M_PI;
-
-		float3 bitan = normalize(cross(hit.n, hit.tan));
-		float r2 = hit.mtl->alpha2*u1/(1+u1*(hit.mtl->alpha2-1));
-		float r = sqrt(r2);
-
-		ray->o = hit.pos + (1e-6*hit.n);
-		ray->d = (sqrt(1-r2))*hit.n
-			+ (cos(u2)*r)*hit.tan
-			+ (sin(u2)*r)*bitan;
-		*th *= hit.mtl->col;
+		curand_init(0, idx, 0, state+idx);
 	}
 }
 
@@ -78,6 +46,53 @@ __device__ float smith_mask(float3 x, float3 n, float a2){
 	return 2/(1+sqrt(1+a2*(1-xn2)/xn2));
 }
 
+__device__ void throuput(	float3 *th, float *pdf, Ray *ray,
+							Hit &hit, curandState *randState){
+
+	if(hit.mtl->type == lambert){
+		float u1 = curand_uniform(randState);
+		float u2 = curand_uniform(randState) * 2*M_PI;
+
+		float3 bitan = normalize(cross(hit.n, hit.tan));
+		float r = sqrt(u1);
+		
+		ray->o = hit.pos + (1e-6*hit.n);
+		ray->d = (hit.n * (sqrt(1-u1)))
+			+ (hit.tan * (r*cos(u2)))
+			+ (bitan * (r*sin(u2)));
+		
+		*th *= hit.mtl->col;
+		*pdf *= M_1_PI;
+	}
+
+	if(hit.mtl->type == GGX_ref_iso){
+		float u1 = curand_uniform(randState);
+		float u2 = curand_uniform(randState) * 2*M_PI;
+		float3 wi = -ray->d;
+
+		float3 bitan = normalize(cross(hit.n, hit.tan));
+		float r2 = hit.mtl->alpha2*u1/(1+u1*(hit.mtl->alpha2-1));
+		float r = sqrt(r2);
+
+		ray->o = hit.pos + (1e-6*hit.n);
+		ray->d = (sqrt(1-r2))*hit.n
+			+ (cos(u2)*r)*hit.tan
+			+ (sin(u2)*r)*bitan;
+		
+		*th *= hit.mtl->col;
+		
+		float3 m = normalize(wi+(ray->d));
+		float mn = dot(m, hit.n);
+		float D = GGX_iso_D(dot(m, hit.n), hit.mtl->alpha2);
+		float gi = smith_mask(wi, hit.n, hit.mtl->alpha2);
+		float go = smith_mask(ray->d, hit.n, hit.mtl->alpha2);
+		float w = 0.25*fabs(gi*go*dot(ray->d, m)/(dot(ray->d, hit.n)*mn));
+		*pdf = w*D;
+	}
+
+	return;
+}
+
 __global__ void render(	float3* const pResult, 
 						const uint32_t w, const uint32_t h, const uint32_t spp,
 						Scene* const scene,
@@ -90,7 +105,7 @@ __global__ void render(	float3* const pResult,
 	const float imgDimNorm = 1.0/h;
 	const uint32_t idx = j*w+i;
 	curandState *rand_local = randState+idx;
-	bool NEE = !true;
+	bool NEE = true;
 
 	for(uint32_t n=0; n<spp; n++){
 		float x =  2*(i+curand_uniform(rand_local))*imgDimNorm - 1;
@@ -99,22 +114,32 @@ __global__ void render(	float3* const pResult,
 		PathState ps(2,rand_local,true);
 		Ray ray = scene->camera.ray(x,y);
 		float3 th = make_float3(1);
+		float pdf = 1;
 
 		while(ps.contIntegration(&th)){
 			Hit hit = scene->nearest(ray);
 
+
 			if(hit.mtl->type == emit){
 				ps.terminate = true;
-				pResult[idx] += th * hit.mtl->col;
+
+				float3 cont = th * hit.mtl->col;
+				pResult[idx] += cont;
 			}
+
 			else if(NEE){
 				//currently sampleing facing facet only from sphere light
-				float3 lightPos = scene->spheres[2].center;
-				float3 lightEmit = scene->spheres[2].mtl->col;
+				float u1 = 2*curand_uniform(rand_local) - 1;
+				float u2 = 2*M_PI*curand_uniform(rand_local);
+				float r = sqrt(1-u1*u1);
+
 				float lightR = scene->spheres[2].r;
+				float3 lightNormal = make_float3(r*cos(u2), r*sin(u2), u1);
+				float3 lightPos = scene->spheres[2].center + lightR*lightNormal;
+				float3 lightEmit = scene->spheres[2].mtl->col;
 
 				float3 PL = lightPos-hit.pos;
-				if(dot(PL,hit.n)>0){
+				if(dot(PL,hit.n)>0 && dot(lightNormal, PL)<0){
 					Ray shadowRay(hit.pos + 1e-6*hit.n, normalize(PL));
 					Hit shadowTrace = scene->nearest(shadowRay);
 					float dist = abs(PL)-lightR;
@@ -142,17 +167,18 @@ __global__ void render(	float3* const pResult,
 							else r = 0;
 						}
 
-						float G = dot(hit.n,shadowRay.d)/(dist*dist);
-						pResult[idx] += th*hit.mtl->col*r*lightEmit*G;
+						float G = -dot(hit.n,shadowRay.d)*dot(shadowRay.d,lightNormal)/(dist*dist);
+						float3 cont = th*hit.mtl->col*lightEmit*G*r;
+						pResult[idx] += cont;
 					}
 				}
 			}
 			// end NEE
 
-			throuput(&th, &ray, hit, rand_local);
+			throuput(&th, &pdf, &ray, hit, rand_local);
 		}
 	}
-	pResult[idx] *= make_float3(1.0/spp);
+	pResult[idx] = pResult[idx]/make_float3(spp);
 
 }
 
@@ -161,7 +187,7 @@ int main(){
 
 	const uint32_t w = 512;
 	const uint32_t h = 512;
-	const uint32_t spp = 4000;
+	const uint32_t spp = 100;
 	float3* result;
 	cudaMallocManaged(&result, w*h*sizeof(float3));
 
@@ -173,7 +199,6 @@ int main(){
 	scene->createScene();
 	printBreak();
 
-
 	const int tx = 16;
 	const int ty = 16;
 
@@ -181,13 +206,14 @@ int main(){
 	const dim3 threads(tx,ty);
 
 	initRandom<<<blocks, threads>>>(randState, w, h);
+	checkCudaErrors(cudaGetLastError());
 	cudaDeviceSynchronize();
 
 	render<<<blocks, threads>>>(result, w, h, spp, scene, randState);
 	checkCudaErrors(cudaGetLastError());
 	cudaDeviceSynchronize();
 
-	writeJPG(result, w, h);
+	writeImage(result, w, h, PNG);
 
 
 	cudaFree(scene->spheres);
