@@ -13,10 +13,10 @@ __host__ __device__ inline float3 operator *(float t, float3 a){return make_floa
 __host__ __device__ inline float3 operator /(float3 a, float3 b){return make_float3(a.x/b.x, a.y/b.y, a.z/b.z);}
 __host__ __device__ inline float3 operator /(float3 a, float t){t=1/t; return make_float3(a.x*t, a.y*t, a.z*t);}
 
-__host__ __device__ inline void operator +=(float3 &a, float3 &b){a.x+=b.x; a.y+=b.y; a.z+=b.z;}
-__host__ __device__ inline void operator -=(float3 &a, float3 &b){a.x-=b.x; a.y-=b.y; a.z-=b.z;}
-__host__ __device__ inline void operator *=(float3 &a, float3 &b){a.x*=b.x; a.y*=b.y; a.z*=b.z;}
-__host__ __device__ inline void operator /=(float3 &a, float3 &b){a.x/=b.x; a.y/=b.y; a.z/=b.z;}
+__host__ __device__ inline void operator +=(float3 &a, float3 b){a.x+=b.x; a.y+=b.y; a.z+=b.z;}
+__host__ __device__ inline void operator -=(float3 &a, float3 b){a.x-=b.x; a.y-=b.y; a.z-=b.z;}
+__host__ __device__ inline void operator *=(float3 &a, float3 b){a.x*=b.x; a.y*=b.y; a.z*=b.z;}
+__host__ __device__ inline void operator /=(float3 &a, float3 b){a.x/=b.x; a.y/=b.y; a.z/=b.z;}
 
 __host__ __device__ inline float dot(float3 &a, float3 &b){return a.x*b.x + a.y*b.y + a.z*b.z;}
 __host__ __device__ inline float abs(float3 a){return sqrt(dot(a,a));}
