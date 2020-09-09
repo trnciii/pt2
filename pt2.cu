@@ -213,7 +213,7 @@ int main(){
 	checkCudaErrors(cudaGetLastError());
 	cudaDeviceSynchronize();
 
-	writeImage(result, w, h, PNG);
+	writeimage(result, w, h);
 
 
 	cudaFree(scene->spheres);

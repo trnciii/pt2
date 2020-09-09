@@ -12,7 +12,7 @@ __host__ unsigned char tonemap(double c){
 	return c_out&0xff;
 }
 
-__host__ int writeJPG(float3 *color, int w, int h){
+__host__ int writeimage(float3 *color, int w, int h){
 	unsigned char *tone = new unsigned char[3*w*h];
 	for(int i=0; i<w*h; i++){
 		tone[3*i  ] = tonemap(color[i].x);
