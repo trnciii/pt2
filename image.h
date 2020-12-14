@@ -3,7 +3,7 @@
 #include "functions.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "./stbi/stb_image_write.h"
+#include <stb/stb_image_write.h>
 
 __host__ unsigned char tonemap(double c){
 	int c_out = 255*pow(c,(1/2.2)) +0.5;
