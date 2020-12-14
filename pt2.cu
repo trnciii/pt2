@@ -46,6 +46,15 @@ __device__ float smith_mask(float3 x, float3 n, float a2){
 	return 2/(1+sqrt(1+a2*(1-xn2)/xn2));
 }
 
+__device__ float3 sample_GGX_NDF(float u1, float u2, float a2){
+	u2 *= 2*M_PI;
+	float r2 = a2*u1/(1+u1*(a2-1));
+	float r = sqrt(r2);
+	float z = sqrt(1-r2);
+
+	return make_float3(r*cos(u2), r*sin(u2), z);
+}
+
 __device__ void throuput(	float3 *th, float *pdf, Ray *ray,
 							Hit &hit, curandState *randState){
 
@@ -62,32 +71,27 @@ __device__ void throuput(	float3 *th, float *pdf, Ray *ray,
 			+ (bitan * (r*sin(u2)));
 		
 		*th *= hit.mtl->col;
-		*pdf *= M_1_PI;
 	}
 
 	if(hit.mtl->type == GGX_ref_iso){
-		float u1 = curand_uniform(randState);
-		float u2 = curand_uniform(randState) * 2*M_PI;
 		float3 wi = -ray->d;
-
 		float3 bitan = normalize(cross(hit.n, hit.tan));
-		float r2 = hit.mtl->alpha2*u1/(1+u1*(hit.mtl->alpha2-1));
-		float r = sqrt(r2);
+		
+		float u1 = curand_uniform(randState);
+		float u2 = curand_uniform(randState);
+		float3 m_tan = sample_GGX_NDF(u1, u2, hit.mtl->alpha2);
+		float3 m = m_tan.x*hit.tan + m_tan.y*bitan + m_tan.z*hit.n;
+		
+		float3 wo = ray->d - 2*dot(ray->d, m)*m;
+
+		float mn = dot(m, hit.n);
+		float gi = smith_mask(wi, hit.n, hit.mtl->alpha2);
+		float go = smith_mask(wo, hit.n, hit.mtl->alpha2);
+		float w = fabs(gi*go*dot(wi, m)/(dot(wi, hit.n)*m_tan.z));
 
 		ray->o = hit.pos + (1e-6*hit.n);
-		ray->d = (sqrt(1-r2))*hit.n
-			+ (cos(u2)*r)*hit.tan
-			+ (sin(u2)*r)*bitan;
-		
-		*th *= hit.mtl->col;
-		
-		float3 m = normalize(wi+(ray->d));
-		float mn = dot(m, hit.n);
-		float D = GGX_iso_D(dot(m, hit.n), hit.mtl->alpha2);
-		float gi = smith_mask(wi, hit.n, hit.mtl->alpha2);
-		float go = smith_mask(ray->d, hit.n, hit.mtl->alpha2);
-		float w = 0.25*fabs(gi*go*dot(ray->d, m)/(dot(ray->d, hit.n)*mn));
-		*pdf = w*D;
+		ray->d = wo;
+		*th *= w*hit.mtl->col;
 	}
 
 	return;
@@ -105,7 +109,7 @@ __global__ void render(	float3* const pResult,
 	const float imgDimNorm = 1.0/h;
 	const uint32_t idx = j*w+i;
 	curandState *rand_local = randState+idx;
-	bool NEE = true;
+	bool NEE = !true;
 
 	for(uint32_t n=0; n<spp; n++){
 		float x =  2*(i+curand_uniform(rand_local))*imgDimNorm - 1;
@@ -128,7 +132,6 @@ __global__ void render(	float3* const pResult,
 			}
 
 			else if(NEE){
-				//currently sampleing facing facet only from sphere light
 				float u1 = 2*curand_uniform(rand_local) - 1;
 				float u2 = 2*M_PI*curand_uniform(rand_local);
 				float r = sqrt(1-u1*u1);
@@ -142,7 +145,7 @@ __global__ void render(	float3* const pResult,
 				if(dot(PL,hit.n)>0 && dot(lightNormal, PL)<0){
 					Ray shadowRay(hit.pos + 1e-6*hit.n, normalize(PL));
 					Hit shadowTrace = scene->nearest(shadowRay);
-					float dist = abs(PL)-lightR;
+					float dist = abs(PL);
 
 					if(shadowTrace.dist < dist+1e-6){
 						float r;

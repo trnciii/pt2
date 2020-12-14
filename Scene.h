@@ -66,8 +66,7 @@ struct Scene{
 
 		Material *left;
 		cudaMallocManaged(&left, sizeof(Material));
-		left->setLambert(make_float3(0.9, 0.1, 0.1));
-		left->setNonPhotorealistic();
+		left->setGGX_iso(make_float3(0.9, 0.1, 0.1), 0.1);
 
 		Material *right;
 		cudaMallocManaged(&right, sizeof(Material));
@@ -80,7 +79,7 @@ struct Scene{
 		nSpheres = 3;
 		if(nSpheres>0){
 			cudaMallocManaged(&spheres, nSpheres*sizeof(Sphere));
-			spheres[0] = Sphere(make_float3(-0, 1,-1  ), 1.5, left);
+			spheres[0] = Sphere(make_float3(-1, 1,-1  ), 1.5, left);
 			spheres[1] = Sphere(make_float3( 1, 0,-1  ), 1.5, right);
 			spheres[2] = Sphere(make_float3( 0,-1, 2.2), 0.8, emit);
 		}
