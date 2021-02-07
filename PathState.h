@@ -10,7 +10,7 @@ struct PathState{
 	__device__ PathState(uint32_t depth, curandState* rand, const bool RR)
 	:terminate(false), curDepth(0), maxDepth(depth), randState(rand), enableRussianRoulette(RR){}
 
-	__device__ bool contIntegration(float3 *th){
+	__device__ bool contIntegration(glm::vec3 *th){
 		if(terminate)return false;
 
 		if(++curDepth > maxDepth){
@@ -18,7 +18,7 @@ struct PathState{
 
 			float p = fmaxf(th->x, fmaxf(th->y,th->z));
 			if(curand_uniform(randState)<p)
-				*th *= make_float3(1/p);
+				*th *= 1/p;
 			else return false;
 		}
 		return true;

@@ -1,8 +1,11 @@
 #pragma once
 
-struct Ray{
-	float3 o;
-	float3 d;
+#include <cuda.h>
+#include <glm/glm.hpp>
 
-	__device__ Ray(float3 _o, float3 _d):o(_o), d(_d){}
+struct Ray{
+	glm::vec3 o;
+	glm::vec3 d;
+
+	__device__ Ray(glm::vec3 _o, glm::vec3 _d):o(_o), d(_d){}
 };

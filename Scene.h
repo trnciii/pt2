@@ -1,6 +1,8 @@
 #pragma once
 
-#include "vec.h"
+#include <cuda.h>
+#include <glm/glm.hpp>
+
 #include "Camera.h"
 // #include "Object.h"
 #include "Object_implementations.h"
@@ -31,9 +33,9 @@ struct Scene{
 			planes[i].intersect(&hit, ray);
 		}
 
-		hit.pos = ray.o + make_float3(hit.dist)*ray.d;
-		hit.tan = normalize(hit.dpdu);
-		if(dot(ray.d,hit.n)>0){
+		hit.pos = ray.o + hit.dist*ray.d;
+		hit.tan = glm::normalize(hit.dpdu);
+		if(glm::dot(ray.d,hit.n)>0){
 			hit.n = -hit.n;
 			hit.backface = true;
 		}
@@ -54,40 +56,40 @@ struct Scene{
 	}
 
 	__host__ void createScene(){
-		background.setEmission(make_float3(0.1));
+		background.setEmission(glm::vec3(0.1));
 
-		camera.pos = make_float3(0,-4,-0);
-		camera.setBasis(make_float3(0,1,0), make_float3(0,0,1));
+		camera.pos = glm::vec3(0,-4,-0);
+		camera.setBasis(glm::vec3(0,1,0), glm::vec3(0,0,1));
 		camera.focal = 1;
 
 		Material *emit;
 		cudaMallocManaged(&emit, sizeof(Material));
-		emit->setEmission(make_float3(4));
+		emit->setEmission(glm::vec3(4));
 
 		Material *left;
 		cudaMallocManaged(&left, sizeof(Material));
-		left->setGGX_iso(make_float3(0.9, 0.1, 0.1), 0.1);
+		left->setGGX_iso(glm::vec3(0.9, 0.1, 0.1), 0.1);
 
 		Material *right;
 		cudaMallocManaged(&right, sizeof(Material));
-		right->setLambert(make_float3(0.1, 0.1, 0.9));
+		right->setLambert(glm::vec3(0.1, 0.1, 0.9));
 
 		Material *floor;
 		cudaMallocManaged(&floor, sizeof(Material));
-		floor->setGGX_iso(make_float3(0.1), 0.1);
+		floor->setGGX_iso(glm::vec3(0.1), 0.1);
 
 		nSpheres = 3;
 		if(nSpheres>0){
 			cudaMallocManaged(&spheres, nSpheres*sizeof(Sphere));
-			spheres[0] = Sphere(make_float3(-1, 1,-1  ), 1.5, left);
-			spheres[1] = Sphere(make_float3( 1, 0,-1  ), 1.5, right);
-			spheres[2] = Sphere(make_float3( 0,-1, 2.2), 0.8, emit);
+			spheres[0] = Sphere(glm::vec3(-1, 1,-1  ), 1.5, left);
+			spheres[1] = Sphere(glm::vec3( 1, 0,-1  ), 1.5, right);
+			spheres[2] = Sphere(glm::vec3( 0,-1, 2.2), 0.8, emit);
 		}
 
 		nPlanes = 1;
 		if(nPlanes>0){
 			cudaMallocManaged(&planes, nPlanes*sizeof(Plane));
-			planes[0] = Plane(make_float3(0,0,-3), make_float3(4,0,0), make_float3(0,4,0), floor);
+			planes[0] = Plane(glm::vec3(0,0,-3), glm::vec3(4,0,0), glm::vec3(0,4,0), floor);
 		}
 
 		printf("scene created\n");
