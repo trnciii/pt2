@@ -7,11 +7,11 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 
-find_package(STB_Image_Write REQUIRED)
+find_package(STB_IMAGE REQUIRED)
 include_directories(${STB_INCLUDE_DIRS})
 
 find_package(CUDA REQUIRED)
-if(CUDA_FOUND)
+if(CUDA_FOUND AND GLM_FOUND AND STB_IMAGE_FOUND)
 	message("Cuda version: " ${CUDA_VERSION})
 	CUDA_ADD_EXECUTABLE(pt2 pt2.cu)
 endif()
